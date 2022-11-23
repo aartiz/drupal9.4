@@ -6,6 +6,7 @@ use Drupal\commerce_order\Adjustment;
 use Drupal\commerce_order\Entity\Order;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItem;
+use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethod;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_price\Price;
@@ -61,6 +62,50 @@ class PaymentIntentTest extends StripeIntegrationTestBase {
 
     $intent = $intent->confirm();
     $this->assertEquals($confirmed_status, $intent->status);
+  }
+
+  /**
+   * Tests creating payment intents with additional parameters.
+   */
+  public function testCreatePaymentIntentAdditionalParameters() {
+    $gateway = $this->generateGateway();
+    $plugin = $gateway->getPlugin();
+    assert($plugin instanceof StripeInterface);
+
+    $order_payment_method = $this->prophesize(PaymentMethodInterface::class);
+    $order_payment_method->getRemoteId()->willReturn('pm_card_threeDSecureOptional');
+    $order = $this->prophesize(OrderInterface::class);
+    $order->get('payment_method')->willReturn((object) [
+      'entity' => $order_payment_method->reveal(),
+    ]);
+    $order->getTotalPrice()->willReturn(new Price('15.00', 'USD'));
+    $order->getStoreId()->willReturn(1111);
+    $order->id()->willReturn(9999);
+    $order->getCustomer()->willReturn(User::getAnonymousUser());
+    $order->setData('stripe_intent', Argument::containingString('pi_'))->willReturn($order->reveal());
+    $order->save()->willReturn(NULL);
+
+    $payment_payment_method = $this->prophesize(PaymentMethodInterface::class);
+    $payment_payment_method->getRemoteId()->willReturn('pm_card_threeDSecure2Required');
+    $payment = $this->prophesize(PaymentInterface::class);
+    $payment->getPaymentMethod()->willReturn($payment_payment_method->reveal());
+    $payment->getAmount()->willReturn(new Price('22.00', 'GBP'));
+
+    $intent_attributes = [
+      'capture_method' => 'manual',
+      'description' => 'a test intent',
+    ];
+
+    $intent = $plugin->createPaymentIntent($order->reveal(), $intent_attributes, $payment->reveal());
+    $this->assertEquals(PaymentIntent::STATUS_REQUIRES_CONFIRMATION, $intent->status);
+
+    // The passed intent attributes should override the defaults.
+    $this->assertEquals('manual', $intent->capture_method);
+    $this->assertEquals('a test intent', $intent->description);
+
+    // Price and payment method come from payment not order.
+    $this->assertEquals($intent->currency, 'gbp');
+    $this->assertEquals($intent->amount, 2200);
   }
 
   /**

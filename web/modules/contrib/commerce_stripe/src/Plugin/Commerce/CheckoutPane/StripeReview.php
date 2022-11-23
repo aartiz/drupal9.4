@@ -118,8 +118,10 @@ class StripeReview extends CheckoutPaneBase {
     else {
       $payment_process_pane = $this->checkoutFlow->getPane('payment_process');
       assert($payment_process_pane instanceof CheckoutPaneInterface);
-      $capture = $payment_process_pane->getConfiguration()['capture'];
-      $intent = $stripe_plugin->createPaymentIntent($this->order, $capture);
+      $intent_attributes = [
+        'capture_method' => $payment_process_pane->getConfiguration()['capture'] ? 'automatic' : 'manual',
+      ];
+      $intent = $stripe_plugin->createPaymentIntent($this->order, $intent_attributes);
     }
     if ($intent->status === PaymentIntent::STATUS_REQUIRES_PAYMENT_METHOD) {
       $payment_method = $this->order->get('payment_method')->entity;

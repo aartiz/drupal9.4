@@ -16,6 +16,7 @@
     ],
     "require": {
         "composer/installers": "^1.9",
+        "cweagans/composer-patches": "^1.7",
         "drupal/commerce": "^2.32",
         "drupal/commerce_stripe": "^1.0@RC",
         "drupal/core-composer-scaffold": "^9.4",
@@ -33,7 +34,8 @@
             "composer/installers": true,
             "drupal/core-composer-scaffold": true,
             "drupal/core-project-message": true,
-            "dealerdirect/phpcodesniffer-composer-installer": true
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "cweagans/composer-patches": true
         },
         "sort-packages": true
     },
@@ -72,26 +74,32 @@
                 "type:drupal-custom-theme"
             ]
         },
-        "drupal-core-project-message": {
-            "include-keys": [
-                "homepage",
-                "support"
-            ],
-            "post-create-project-cmd-message": [
-                "<bg=blue;fg=white>                                                         </>",
-                "<bg=blue;fg=white>  Congratulations, you’ve installed the Drupal codebase  </>",
-                "<bg=blue;fg=white>  from the drupal/recommended-project template!          </>",
-                "<bg=blue;fg=white>                                                         </>",
-                "",
-                "<bg=yellow;fg=black>Next steps</>:",
-                "  * Install the site: https://www.drupal.org/docs/8/install",
-                "  * Read the user guide: https://www.drupal.org/docs/user_guide/en/index.html",
-                "  * Get support: https://www.drupal.org/support",
-                "  * Get involved with the Drupal community:",
-                "      https://www.drupal.org/getting-involved",
-                "  * Remove the plugin that prints this message:",
-                "      composer remove drupal/core-project-message"
-            ]
+        "patches": {
+            "drupal/commerce_stripe": {
+                "patch1": "https://git.drupalcode.org/project/commerce_stripe/-/merge_requests/10/diffs.patch",
+                "patch2": "https://git.drupalcode.org/project/commerce_stripe/-/merge_requests/11/diffs.patch"
+            },
+            "drupal-core-project-message": {
+                "include-keys": [
+                    "homepage",
+                    "support"
+                ],
+                "post-create-project-cmd-message": [
+                    "<bg=blue;fg=white>                                                         </>",
+                    "<bg=blue;fg=white>  Congratulations, you’ve installed the Drupal codebase  </>",
+                    "<bg=blue;fg=white>  from the drupal/recommended-project template!          </>",
+                    "<bg=blue;fg=white>                                                         </>",
+                    "",
+                    "<bg=yellow;fg=black>Next steps</>:",
+                    "  * Install the site: https://www.drupal.org/docs/8/install",
+                    "  * Read the user guide: https://www.drupal.org/docs/user_guide/en/index.html",
+                    "  * Get support: https://www.drupal.org/support",
+                    "  * Get involved with the Drupal community:",
+                    "      https://www.drupal.org/getting-involved",
+                    "  * Remove the plugin that prints this message:",
+                    "      composer remove drupal/core-project-message"
+                ]
+            }
         }
     }
 }

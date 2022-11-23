@@ -6,6 +6,7 @@ use Drupal\commerce_order\Entity\Order;
 use Drupal\commerce_order\Entity\OrderItem;
 use Drupal\commerce_payment\Entity\Payment;
 use Drupal\commerce_payment\Entity\PaymentMethod;
+use Drupal\commerce_payment\Exception\DeclineException;
 use Drupal\commerce_payment\Exception\SoftDeclineException;
 use Drupal\commerce_price\Price;
 use Drupal\commerce_stripe\Plugin\Commerce\PaymentGateway\StripeInterface;
@@ -27,10 +28,12 @@ class CreatePaymentTest extends StripeIntegrationTestBase {
    *   The capture.
    * @param string $confirmed_status
    *   The confirmed intent status.
+   * @param bool $has_intent
+   *   Whether the order already has a payment intent when createPayment() is called.
    *
    * @dataProvider dataProviderCreatePayment
    */
-  public function testCreatePayment($payment_method_token, $capture, $confirmed_status) {
+  public function testCreatePayment($payment_method_token, $capture, $confirmed_status, $has_intent) {
     $gateway = $this->generateGateway();
     $plugin = $gateway->getPlugin();
     assert($plugin instanceof StripeInterface);
@@ -69,20 +72,39 @@ class CreatePaymentTest extends StripeIntegrationTestBase {
       'order_id' => $order->id(),
     ]);
 
-    $intent = $plugin->createPaymentIntent($order, $capture);
-    // Programmatically confirm the intent, the customer would be performing
-    // this action on the client side.
-    $intent->confirm();
-    if ($confirmed_status === PaymentIntent::STATUS_REQUIRES_ACTION) {
-      $this->expectException(SoftDeclineException::class);
-      $this->expectExceptionMessage('The payment intent requires action by the customer for authentication');
+    if ($has_intent) {
+      // Create & confirm the intent, simulating the customer
+      // using the stripe review checkout pane.
+      $intent = $plugin->createPaymentIntent($order, $capture);
+      $intent->confirm();
     }
+
+    // Some scenarios expect the payment to fail, and should throw exceptions.
+    if ($confirmed_status !== PaymentIntent::STATUS_SUCCEEDED) {
+      if ($has_intent) {
+        $this->expectException(SoftDeclineException::class);
+        $this->expectExceptionMessage('The payment intent requires action by the customer for authentication');
+      }
+      else {
+        $this->expectException(DeclineException::class);
+      }
+    }
+
     $plugin->createPayment($payment, $capture);
-    $intent = PaymentIntent::retrieve($order->getData('stripe_intent'));
-    $this->assertEquals($capture ? 'completed' : 'authorization', $payment->getState()->value);
-    $this->assertEquals($intent->charges->data[0]->id, $payment->getRemoteId());
-    // Tests metadata set by commerce_stripe_test.
-    $this->assertEquals($intent->metadata['payment_uuid'], $payment->uuid());
+
+    $payment = $this->reloadEntity($payment);
+    $next_payment_state = $capture ? 'completed' : 'authorization';
+    $this->assertEquals($next_payment_state, $payment->getState()->getId());
+    $this->assertNotNull($payment->getRemoteId());
+
+    // We can only retrieve the payment intent if it is created explicitly above,
+    // rather than created by createPayment().  
+    if ($has_intent) {
+      $intent = PaymentIntent::retrieve($order->getData('stripe_intent'));
+      $this->assertEquals($intent->charges->data[0]->id, $payment->getRemoteId());
+      // Tests metadata set by commerce_stripe_test.
+      $this->assertEquals($intent->metadata['payment_uuid'], $payment->uuid());
+    }
 
     $order = $this->reloadEntity($order);
     $this->assertNull($order->getData('stripe_intent'));
@@ -98,14 +120,69 @@ class CreatePaymentTest extends StripeIntegrationTestBase {
    */
   public function dataProviderCreatePayment() {
     // 3DS 2 authentication must be completed for the payment to be successful.
-    yield ['pm_card_threeDSecure2Required', TRUE, PaymentIntent::STATUS_REQUIRES_ACTION];
-    yield ['pm_card_threeDSecure2Required', FALSE, PaymentIntent::STATUS_REQUIRES_ACTION];
+    yield [
+      'pm_card_threeDSecure2Required',
+      TRUE,
+      PaymentIntent::STATUS_REQUIRES_ACTION,
+      TRUE,
+    ];
+    yield [
+      'pm_card_threeDSecure2Required',
+      FALSE,
+      PaymentIntent::STATUS_REQUIRES_ACTION,
+      TRUE,
+      ];
     // 3DS authentication may still be performed, but is not required.
-    yield ['pm_card_threeDSecureOptional', TRUE, PaymentIntent::STATUS_SUCCEEDED];
-    // 3DS is supported for this card, but this card is not enrolled in 3D Secure
-    yield ['pm_card_visa', TRUE, PaymentIntent::STATUS_SUCCEEDED];
+    yield [
+      'pm_card_threeDSecureOptional',
+      TRUE,
+      PaymentIntent::STATUS_SUCCEEDED,
+      TRUE,
+      ];
+    // 3DS is supported for this card, but this card is not enrolled in 3DS.
+    yield [
+      'pm_card_visa',
+      TRUE,
+      PaymentIntent::STATUS_SUCCEEDED,
+      TRUE,
+      ];
     // 3DS is not supported on this card and cannot be invoked.
-    yield ['pm_card_amex_threeDSecureNotSupported', TRUE, PaymentIntent::STATUS_SUCCEEDED];
+    yield [
+      'pm_card_amex_threeDSecureNotSupported',
+      TRUE,
+      PaymentIntent::STATUS_SUCCEEDED,
+      TRUE,
+      ];
+    // The stripe review pane is not used, and the card allows this.
+    yield [
+      'pm_card_threeDSecureOptional',
+      TRUE,
+      PaymentIntent::STATUS_SUCCEEDED,
+      FALSE,
+      ];
+    // The stripe review pane is not used, and the card doesn't allow this.
+    yield [
+      'pm_card_threeDSecure2Required',
+      TRUE,
+      PaymentIntent::STATUS_REQUIRES_ACTION,
+      FALSE,
+      ];
+    // A stored card is used card without the stripe review pane, and the card
+    // is setup for this.
+    yield [
+      'pm_card_authenticationRequiredSetupForOffSession',
+      TRUE,
+      PaymentIntent::STATUS_SUCCEEDED,
+      FALSE,
+      ];
+    // A stored card is used without the stripe review pane, and the card
+    // wants authentication regardless of how it was setup.
+    yield [
+      'pm_card_authenticationRequired',
+      TRUE,
+      PaymentIntent::STATUS_REQUIRES_ACTION,
+      FALSE,
+      ];
   }
 
 }

@@ -19,6 +19,7 @@ use Drupal\commerce_price\Price;
 use Drupal\commerce_stripe\Event\TransactionDataEvent;
 use Drupal\commerce_stripe\Event\StripeEvents;
 use Drupal\Component\Datetime\TimeInterface;
+use Drupal\Component\Utility\NestedArray;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\Form\FormStateInterface;
@@ -217,7 +218,21 @@ class Stripe extends OnsitePaymentGatewayBase implements StripeInterface {
     assert($order instanceof OrderInterface);
     $intent_id = $order->getData('stripe_intent');
     try {
-      $intent = PaymentIntent::retrieve($intent_id);
+      if (!empty($intent_id)) {
+        $intent = PaymentIntent::retrieve($intent_id);
+      }
+      else {
+        // If there is no payment intent, it means we are not in a checkout
+        // flow with the stripe review pane, so we should assume the
+        // customer is not available for SCA and create an immediate
+        // off_session payment intent.
+        $intent_attributes = [
+          'confirm'        => TRUE,
+          'off_session'    => TRUE,
+          'capture_method' => $capture ? 'automatic' : 'manual',
+        ];
+        $intent = $this->createPaymentIntent($order, $intent_attributes, $payment);
+      }
       if ($intent->status === PaymentIntent::STATUS_REQUIRES_CONFIRMATION) {
         $intent = $intent->confirm();
       }
@@ -241,7 +256,7 @@ class Stripe extends OnsitePaymentGatewayBase implements StripeInterface {
         throw new HardDeclineException($decline_message);
       }
       if (count($intent->charges->data) === 0) {
-        throw new HardDeclineException(sprintf('The payment intent %s did not have a charge object.', $intent_id));
+        throw new HardDeclineException(sprintf('The payment intent %s did not have a charge object.', $intent->id));
       }
       $next_state = $capture ? 'completed' : 'authorization';
       $payment->setState($next_state);
@@ -430,30 +445,37 @@ class Stripe extends OnsitePaymentGatewayBase implements StripeInterface {
   /**
    * {@inheritdoc}
    */
-  public function createPaymentIntent(OrderInterface $order, $capture = TRUE) {
+  public function createPaymentIntent(OrderInterface $order, $intent_attributes = [], PaymentInterface $payment = NULL) {
+    if (is_bool($intent_attributes)) {
+      $intent_attributes = [
+        'capture_method' => $intent_attributes ? 'automatic' : 'manual',
+      ];
+      @trigger_error('Passing a boolean representing capture method as the second parameter to StripeInterface::createPaymentIntent() is deprecated in commerce_stripe:8.x-1.0 and this parameter must be an array of payment intent attributes in commerce_stripe:9.x-2.0. See https://www.drupal.org/project/commerce_stripe/issues/3259211', E_USER_DEPRECATED);
+    }
+
     /** @var \Drupal\commerce_payment\Entity\PaymentMethodInterface $payment_method */
-    $payment_method = $order->get('payment_method')->entity;
+    $payment_method = $payment ? $payment->getPaymentMethod() : $order->get('payment_method')->entity;
+    /** @var \Drupal\commerce_price\Price */
+    $amount = $payment ? $payment->getAmount() : $order->getTotalPrice();
 
-    $payment_method_remote_id = $payment_method->getRemoteId();
-    $customer_remote_id = $this->getRemoteCustomerId($order->getCustomer());
-
-    $amount = $this->minorUnitsConverter->toMinorUnits($order->getTotalPrice());
-    $order_id = $order->id();
-    $capture_method = $capture ? 'automatic' : 'manual';
-    $intent_array = [
-      'amount' => $amount,
-      'currency' => strtolower($order->getTotalPrice()->getCurrencyCode()),
+    $default_intent_attributes = [
+      'amount' => $this->minorUnitsConverter->toMinorUnits($amount),
+      'currency' => strtolower($amount->getCurrencyCode()),
       'payment_method_types' => ['card'],
       'metadata' => [
-        'order_id' => $order_id,
+        'order_id' => $order->id(),
         'store_id' => $order->getStoreId(),
       ],
-      'payment_method' => $payment_method_remote_id,
-      'capture_method' => $capture_method,
+      'payment_method' => $payment_method->getRemoteId(),
+      'capture_method' => 'automatic',
     ];
+
+    $customer_remote_id = $this->getRemoteCustomerId($order->getCustomer());
     if (!empty($customer_remote_id)) {
-      $intent_array['customer'] = $customer_remote_id;
+      $default_intent_attributes['customer'] = $customer_remote_id;
     }
+
+    $intent_array = NestedArray::mergeDeep($default_intent_attributes, $intent_attributes);
     try {
       $intent = PaymentIntent::create($intent_array);
       $order->setData('stripe_intent', $intent->id)->save();
