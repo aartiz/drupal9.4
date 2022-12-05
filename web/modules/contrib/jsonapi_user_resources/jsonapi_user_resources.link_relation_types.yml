@@ -1,0 +1,18 @@
+# JSON:API User Resources's link relation types.
+# See https://tools.ietf.org/html/draft-pot-authentication-link-00
+authenticate:
+  description: "Refers to a resource where a client may authenticate for the the context URI."
+  reference: '[TBD]'
+  notes: "This is a draft link relation type that has not yet been officially registered. See https://tools.ietf.org/html/draft-pot-authentication-link-00#section-6.1."
+authenticated-as:
+  description: "Refers to a resource that describes the authenticated entity for the HTTP response."
+  reference: '[TBD]'
+  notes: "This is a draft link relation type that has not yet been officially registered. See https://tools.ietf.org/html/draft-pot-authentication-link-00#section-6.2."
+logout:
+  description: "Refers to an endpoint where a client may invalidate the current authentication session."
+  reference: '[TBD]'
+  notes: "This is a draft link relation type that has not yet been officially registered. See https://tools.ietf.org/html/draft-pot-authentication-link-00#section-6.3."
+register-user:
+  description: "Refers to a resource where a client may create a new user account for the context URI."
+  reference: '[TBD]'
+  notes: "This is a draft link relation type that has not yet been officially registered. See https://tools.ietf.org/html/draft-pot-authentication-link-00#section-6.4."

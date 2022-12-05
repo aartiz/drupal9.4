@@ -1,0 +1,5 @@
+services:
+  jsonapi_user_resources_test.registration_subscriber:
+    class: Drupal\jsonapi_user_resources_test\EventSubscriber\RegistrationSubscriber
+    tags:
+      - { name: event_subscriber }

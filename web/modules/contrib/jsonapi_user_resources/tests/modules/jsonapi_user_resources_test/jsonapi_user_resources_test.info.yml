@@ -1,0 +1,10 @@
+name: 'JSON:API User Resources Test'
+core_version_requirement: ^8.8 || ^9
+type: module
+dependencies:
+  - jsonapi_user_resources:jsonapi_user_resources
+
+# Information added by Drupal.org packaging script on 2020-12-20
+version: '8.x-1.0-alpha4'
+project: 'jsonapi_user_resources'
+datestamp: 1608429162

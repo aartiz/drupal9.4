@@ -1,0 +1,10 @@
+services:
+  jsonapi_user_resources.user_registration_subscriber:
+    class: Drupal\jsonapi_user_resources\EventSubscriber\UserRegistrationSubscriber
+    arguments: ['@config.factory']
+    tags:
+      - { name: event_subscriber }
+  jsonapi_user_resources.password_reset_subscriber:
+    class: Drupal\jsonapi_user_resources\EventSubscriber\PasswordResetSubscriber
+    tags:
+      - { name: event_subscriber }

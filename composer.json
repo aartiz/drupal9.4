@@ -22,7 +22,9 @@
         "drupal/core-composer-scaffold": "^9.4",
         "drupal/core-project-message": "^9.4",
         "drupal/core-recommended": "^9.4",
-        "drupal/inline_entity_form": "^1.0-rc6"
+        "drupal/inline_entity_form": "^1.0-rc6",
+        "drupal/jsonapi_resources": "^1.0@beta",
+        "drupal/jsonapi_user_resources": "^1.0@alpha"
     },
     "conflict": {
         "drupal/drupal": "*"

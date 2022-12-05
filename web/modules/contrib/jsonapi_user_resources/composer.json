@@ -1,0 +1,16 @@
+{
+    "name": "drupal/jsonapi_user_resources",
+    "type": "drupal-module",
+    "description": "Provides JSON:API resources for users, such as registration.",
+    "keywords": ["Drupal", "JSON API"],
+    "license": "GPL-2.0+",
+    "homepage": "https://www.drupal.org/project/jsonapi_user_resources",
+    "minimum-stability": "dev",
+    "require": {
+      "drupal/jsonapi_resources": "^1.0@beta"
+    },
+    "require-dev": {
+      "drupal/jsonapi_hypermedia": "^1.4"
+    }
+  }
+
